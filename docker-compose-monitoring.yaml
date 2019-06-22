@@ -1,0 +1,86 @@
+version: '3'
+services:
+  cadvisor:
+    image: google/cadvisor
+    container_name: cadvisor
+    restart: always
+    ports:
+    - '8081:8081'
+    volumes:
+    - '/:/rootfs:ro'
+    - '/var/run:/var/run:rw'
+    - '/sys:/sys:ro'
+    - '/var/lib/docker/:/var/lib/docker:ro'
+    labels:
+    - "traefik.backend=cadvisor"
+    - "traefik.frontend.rule=Host:cadvisor.riskiwah.net"
+    - "traefik.port=8081"
+    - "traefik.frontend.entryPoints=http"
+    - "com.centurylinklabs.watchtower.enable: true"
+
+  
+  esxi-exporter:
+    build:
+      context: ./prometheus-vmware-exporter/
+      dockerfile: Dockerfile
+    image: prometheus-esxi
+    restart: always
+    ports:
+    - '9512:9512'
+    environment:
+    - ESX_HOST=esx1.riskiwah.net
+    - ESX_USERNAME=root
+    - ESX_PASSWORD=somepassword
+    - ESX_LOG=debug
+    labels:
+    - "traefik.backend=esxi-exporter"
+    - "traefik.frontend.rule=Host:esxi-exporter.riskiwah.net"
+    - "traefik.port=9512"
+    - "traefik.frontend.entryPoints=http"
+    - "com.centurylinklabs.watchtower.enable: true"
+
+  
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    restart: always
+    ports:
+    - 9090:9090
+    command:
+    - --config.file=/etc/prometheus/prometheus.yml
+    volumes:
+    - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+    - cadvisor
+    - esxi-exporter
+    labels:
+    - "traefik.backend=prometheus"
+    - "traefik.frontend.rule=Host:prom.riskiwah.net"
+    - "traefik.port=9090"
+    - "traefik.frontend.entryPoints=http"
+    - "com.centurylinklabs.watchtower.enable: true"
+  
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+    - 3000:3000
+    volumes:
+    - grafana_data:/var/lib/grafana
+    depends_on:
+    - prometheus
+    labels:
+    - "traefik.backend=grafana"
+    - "traefik.frontend.rule=Host:grafana.riskiwah.net"
+    - "traefik.port=3000"
+    - "traefik.frontend.entryPoints=http"
+    - "com.centurylinklabs.watchtower.enable: true"
+
+networks: 
+  default:
+    external:
+      name: dockercomposehomelab_default
+
+volumes:
+  grafana_data:
+    
